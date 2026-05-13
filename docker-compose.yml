@@ -10,7 +10,7 @@ services:
       - "${FRONTEND_HTTP_PORT}:80"
       - "${FRONTEND_HTTPS_PORT}:443"
     volumes:
-      - ./web/certs:/etc/nginx/certs:ro
+      - ./frontend/certs:/etc/nginx/certs:ro
     networks:
       proyecto_net:
         aliases:
