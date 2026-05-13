@@ -1,9 +1,9 @@
 # Proyecto Final Virtualizacion 2026 - 1036622 Byron Jose Albizures Quevedo
 
-Arquitectura de microservicios con Docker:
+Ecommerce sencillo de venta de ropa construido con arquitectura de microservicios:
 
-- `frontend`: aplicacion Vue servida por Nginx con HTTP y HTTPS.
-- `backend`: API REST en Flask.
+- `frontend`: tienda Vue servida por Nginx con HTTP y HTTPS.
+- `backend`: API REST en Flask para productos y pedidos.
 - `mongo`: base de datos MongoDB interna, sin puertos expuestos al host.
 
 ## Estructura
@@ -43,15 +43,17 @@ MongoDB no se expone al exterior. Solo el backend se conecta usando el nombre de
 ```bash
 docker ps
 curl http://localhost:5000/api/health
-curl http://localhost/api/messages
+curl http://localhost/api/products
 ```
 
-Desde el navegador se puede guardar un mensaje. Ese flujo valida:
+Desde el navegador se puede agregar ropa al carrito y registrar un pedido. Ese flujo valida:
 
 - Usuario -> Frontend Vue
 - Frontend -> Backend Flask por `/api`
 - Backend -> MongoDB por nombre de servicio `mongo`
-- Insercion y consulta de datos persistentes
+- Consulta de productos
+- Insercion de pedidos
+- Actualizacion de stock
 
 ## Seguridad basica aplicada
 
@@ -68,6 +70,13 @@ Desde el navegador se puede guardar un mensaje. Ese flujo valida:
 - El certificado HTTPS incluido es local/autofirmado, por lo que el navegador puede mostrar advertencia.
 - Para produccion se deberian usar secretos administrados, certificados validos y reglas de firewall.
 - El backend esta expuesto en el puerto 5000 para pruebas; en produccion podria quedar solo interno detras de Nginx.
+
+## Endpoints principales
+
+- `GET /api/health`: valida conexion con MongoDB.
+- `GET /api/products`: lista prendas disponibles.
+- `GET /api/orders`: lista pedidos recientes.
+- `POST /api/orders`: registra un pedido con `customerName` e `items`.
 
 ## Reflexion final
 
