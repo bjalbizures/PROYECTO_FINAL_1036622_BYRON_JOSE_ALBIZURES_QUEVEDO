@@ -1,0 +1,6 @@
+{
+  "npm.enableScriptExplorer": true,
+  "npm.exclude": [
+    "frontend"
+  ]
+}

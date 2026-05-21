@@ -26,9 +26,15 @@ Ecommerce sencillo de venta de ropa construido con arquitectura de microservicio
 
 ## Ejecucion
 
+`npm start` levanta la aplicacion completa con Docker. Durante el `--build`, el Dockerfile del frontend instala sus dependencias Node y el Dockerfile del backend instala sus dependencias Python dentro de las imagenes.
+
+Para levantar la aplicacion completa:
+
 ```bash
-docker compose up --build
+npm start
 ```
+
+`npm start` crea `.env` desde `env.example` si todavia no existe y luego levanta frontend, backend y MongoDB con Docker Compose.
 
 Accesos:
 
@@ -37,6 +43,22 @@ Accesos:
 - Backend directo: `http://localhost:5000/api/health`
 
 MongoDB no se expone al exterior. Solo el backend se conecta usando el nombre de servicio `mongo`.
+
+## Scripts desde la raiz
+
+```bash
+npm run setup
+npm start
+npm run start:detached
+npm stop
+npm run logs
+```
+
+- `setup` crea el `.env` local desde `env.example` si hace falta.
+- `start` levanta todo el proyecto con Docker Compose.
+- `start:detached` lo levanta en segundo plano.
+- `stop` detiene los contenedores.
+- `logs` muestra la salida de los servicios levantados.
 
 ## Pruebas y validacion
 

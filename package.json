@@ -1,0 +1,11 @@
+{
+  "name": "proyecto-final-1036622",
+  "private": true,
+  "scripts": {
+    "setup": "node -e \"const fs=require('fs'); if (!fs.existsSync('.env')) fs.copyFileSync('env.example', '.env');\"",
+    "start": "npm run setup && docker compose up --build",
+    "start:detached": "npm run setup && docker compose up --build -d",
+    "stop": "docker compose down",
+    "logs": "docker compose logs -f"
+  }
+}

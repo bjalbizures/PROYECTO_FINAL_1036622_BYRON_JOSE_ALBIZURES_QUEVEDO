@@ -1,9 +1,4 @@
 {
-  "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
-  },
   "dependencies": {
     "@vitejs/plugin-vue": "5.0.5",
     "vite": "5.2.12",
