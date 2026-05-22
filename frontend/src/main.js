@@ -15,6 +15,10 @@ createApp({
       error: "",
       success: "",
       saving: false,
+      loadingProducts: true,
+      loadingOrders: true,
+      productsError: "",
+      ordersError: "",
     };
   },
   computed: {
@@ -23,6 +27,14 @@ createApp({
     },
     cartCount() {
       return this.cart.reduce((total, item) => total + item.quantity, 0);
+    },
+    backendAvailable() {
+      return this.status === "ok" && this.database === "connected";
+    },
+    storeUnavailable() {
+      return Boolean(this.productsError)
+        || this.status === "sin conexion"
+        || this.database === "unavailable";
     },
   },
   mounted() {
@@ -40,7 +52,7 @@ createApp({
     async loadStatus() {
       try {
         const response = await fetch(`${apiBase}/health`);
-        const data = await response.json();
+        const data = await this.readJson(response, "No se pudo consultar el estado del backend.");
         this.status = data.status;
         this.database = data.database;
       } catch {
@@ -49,20 +61,47 @@ createApp({
       }
     },
     async loadProducts() {
+      this.loadingProducts = true;
+      this.productsError = "";
+
       try {
         const response = await fetch(`${apiBase}/products`);
-        this.products = await response.json();
+        const products = await this.readJson(response, "No se pudo cargar el catalogo.");
+        this.products = Array.isArray(products) ? products : [];
       } catch {
-        this.error = "No se pudo cargar el catalogo.";
+        this.products = [];
+        this.productsError = "El catalogo no esta disponible porque la API no respondio.";
+      } finally {
+        this.loadingProducts = false;
       }
     },
     async loadOrders() {
+      this.loadingOrders = true;
+      this.ordersError = "";
+
       try {
         const response = await fetch(`${apiBase}/orders`);
-        this.orders = await response.json();
+        const orders = await this.readJson(response, "No se pudieron cargar los pedidos.");
+        this.orders = Array.isArray(orders) ? orders : [];
       } catch {
         this.orders = [];
+        this.ordersError = "Los pedidos recientes no estan disponibles.";
+      } finally {
+        this.loadingOrders = false;
       }
+    },
+    async readJson(response, fallbackMessage) {
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.error || fallbackMessage);
+      }
+
+      return data;
+    },
+    async retryLoads() {
+      this.error = "";
+      await Promise.all([this.loadStatus(), this.loadProducts(), this.loadOrders()]);
     },
     addToCart(product) {
       this.error = "";
@@ -105,6 +144,10 @@ createApp({
       this.saving = true;
 
       try {
+        if (!this.backendAvailable) {
+          throw new Error("El pedido no se puede registrar mientras la API no este disponible.");
+        }
+
         const response = await fetch(`${apiBase}/orders`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -117,11 +160,7 @@ createApp({
           }),
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || "No se pudo registrar el pedido.");
-        }
+        const data = await this.readJson(response, "No se pudo registrar el pedido.");
 
         this.cart = [];
         this.success = `Pedido registrado por ${this.money(data.total)}.`;
@@ -143,10 +182,18 @@ createApp({
           <p class="summary">Catalogo sencillo de prendas conectado a una API Flask y MongoDB en Docker.</p>
         </div>
         <div class="status-panel">
-          <span>Backend: {{ status }}</span>
-          <span>MongoDB: {{ database }}</span>
+          <span :class="backendAvailable ? 'status-ok' : 'status-alert'">Backend: {{ status }}</span>
+          <span :class="database === 'connected' ? 'status-ok' : 'status-alert'">MongoDB: {{ database }}</span>
           <span>Carrito: {{ cartCount }} prendas</span>
         </div>
+      </section>
+
+      <section class="service-alert" v-if="storeUnavailable">
+        <div>
+          <strong>La tienda no pudo cargar sus datos.</strong>
+          <p>Revisa que el backend y MongoDB esten disponibles y vuelve a intentar.</p>
+        </div>
+        <button type="button" @click="retryLoads">Reintentar</button>
       </section>
 
       <section class="store-layout">
@@ -154,6 +201,19 @@ createApp({
           <div class="section-title">
             <h2>Catalogo</h2>
             <p>{{ products.length }} productos disponibles</p>
+          </div>
+
+          <div class="catalog-state" v-if="loadingProducts">
+            Cargando catalogo...
+          </div>
+
+          <div class="catalog-state catalog-error" v-else-if="productsError">
+            <strong>{{ productsError }}</strong>
+            <button type="button" @click="retryLoads">Reintentar</button>
+          </div>
+
+          <div class="catalog-state" v-else-if="products.length === 0">
+            No hay productos disponibles.
           </div>
 
           <article class="product-card" v-for="product in products" :key="product.id">
@@ -209,7 +269,7 @@ createApp({
             <strong>{{ money(cartTotal) }}</strong>
           </div>
 
-          <button type="button" class="checkout" @click="checkout" :disabled="saving || cart.length === 0">
+          <button type="button" class="checkout" @click="checkout" :disabled="saving || cart.length === 0 || !backendAvailable">
             {{ saving ? "Registrando..." : "Registrar pedido" }}
           </button>
 
@@ -218,6 +278,9 @@ createApp({
 
           <div class="orders">
             <h2>Pedidos recientes</h2>
+            <p class="empty" v-if="loadingOrders">Cargando pedidos...</p>
+            <p class="error" v-else-if="ordersError">{{ ordersError }}</p>
+            <p class="empty" v-else-if="orders.length === 0">Aun no hay pedidos recientes.</p>
             <article v-for="order in orders" :key="order.id">
               <strong>{{ order.customerName }}</strong>
               <small>{{ money(order.total) }} - {{ order.items.length }} productos</small>
