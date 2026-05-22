@@ -2,8 +2,8 @@
   "name": "proyecto-final-1036622",
   "private": true,
   "scripts": {
-    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File k8s/start.ps1",
-    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File k8s/stop.ps1",
+    "start": "node scripts/k8s-start.cjs",
+    "stop": "node scripts/k8s-stop.cjs",
     "status": "kubectl get pods,services,pvc --namespace proyecto-1036622",
     "logs": "kubectl logs --follow deployment/backend --namespace proyecto-1036622"
   }

@@ -15,9 +15,10 @@ Ecommerce sencillo de venta de ropa desplegado sobre Kubernetes:
 |   |-- frontend.yaml
 |   |-- mongo.yaml
 |   |-- config.yaml
-|   |-- namespace.yaml
-|   |-- start.ps1
-|   `-- stop.ps1
+|   `-- namespace.yaml
+|-- scripts/
+|   |-- k8s-start.cjs
+|   `-- k8s-stop.cjs
 |-- frontend/
 |   |-- Dockerfile
 |   |-- nginx.conf
@@ -35,18 +36,24 @@ Ecommerce sencillo de venta de ropa desplegado sobre Kubernetes:
 
 Requisitos locales:
 
+- Node.js y npm para ejecutar los comandos de la raiz.
 - Docker para construir las imagenes del frontend y backend.
-- Kubernetes habilitado y `kubectl` apuntando al cluster local.
-- El script `npm start` esta preparado para PowerShell en Windows.
+- Kubernetes local habilitado en `docker-desktop`, `minikube` o `kind`.
+- `npm start` y `npm stop` funcionan en Windows y macOS porque ejecutan scripts de Node.
 
-Antes de ejecutar el despliegue, confirma que el contexto sea local:
+Antes de desplegar puedes revisar los contextos disponibles:
 
 ```bash
 kubectl config get-contexts
-kubectl config use-context docker-desktop
 ```
 
-`k8s/start.ps1` rechaza contextos remotos y solo acepta `docker-desktop`, `minikube` o contextos `kind-*`.
+`scripts/k8s-start.cjs` cambia `kubectl` a un contexto local antes de aplicar recursos. Si el contexto actual es remoto, prefiere `docker-desktop`, luego `minikube` y luego un contexto `kind-*`; si no encuentra ninguno, cancela el despliegue.
+
+Para elegir explicitamente un contexto local disponible:
+
+```bash
+K8S_LOCAL_CONTEXT="docker-desktop" npm start
+```
 
 `npm start` construye imagenes locales, aplica los manifiestos de `k8s/`, crea el `Secret` TLS del frontend desde `frontend/certs/` y espera los rollouts. El flujo funciona directo con Kubernetes de Docker Desktop porque usa las imagenes construidas por el Docker local.
 
@@ -54,11 +61,17 @@ kubectl config use-context docker-desktop
 npm start
 ```
 
-Para un cluster remoto se deben publicar las imagenes en un registry. El script puede hacerlo si el Docker local ya tiene sesion iniciada en ese registry:
+`npm start` siempre aplica recursos al cluster local seleccionado. Si tambien necesitas publicar las imagenes en un registry, el script puede hacerlo cuando Docker ya tiene sesion iniciada en ese registry:
 
 ```powershell
 $env:K8S_IMAGE_REGISTRY = "mi-registry.example.com"
 npm start
+```
+
+En macOS o Linux la variable se define asi:
+
+```bash
+K8S_IMAGE_REGISTRY="mi-registry.example.com" npm start
 ```
 
 En Minikube tambien se pueden cargar las imagenes locales al cluster antes de aplicar los manifiestos.
@@ -68,7 +81,7 @@ Accesos en Kubernetes local con LoadBalancer disponible:
 - Frontend HTTP: `http://localhost`
 - Frontend HTTPS: `https://localhost`
 
-En un cluster remoto revisa el `EXTERNAL-IP` del Service `frontend`:
+En un cluster remoto desplegado por un flujo separado, revisa el `EXTERNAL-IP` del Service `frontend`:
 
 ```bash
 npm run status
@@ -97,7 +110,7 @@ npm run logs
 - `mongo.yaml` crea un `StatefulSet`, un Service interno y un PVC de `1Gi`.
 - `backend.yaml` crea el Deployment Flask y un Service interno llamado `backend`.
 - `frontend.yaml` crea el Deployment Nginx y un Service `LoadBalancer` para HTTP y HTTPS.
-- `start.ps1` crea el `Secret` `frontend-tls` desde los certificados locales antes de aplicar el frontend.
+- `k8s-start.cjs` crea el `Secret` `frontend-tls` desde los certificados locales antes de aplicar el frontend.
 
 Las imagenes locales del backend y frontend usan `imagePullPolicy: IfNotPresent`. Para Kubernetes de Docker Desktop se reutilizan las imagenes que construye `npm start`; en otro cluster los nodos deben poder obtenerlas desde el registry configurado.
 
