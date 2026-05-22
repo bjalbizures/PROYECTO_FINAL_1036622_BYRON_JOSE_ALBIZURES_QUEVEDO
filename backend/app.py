@@ -104,6 +104,11 @@ def health():
     )
 
 
+@app.get("/api/live")
+def live():
+    return jsonify({"service": "backend-flask", "status": "ok"})
+
+
 @app.get("/api/products")
 def list_products():
     try:

@@ -61,7 +61,7 @@ spec:
             timeoutSeconds: 3
           livenessProbe:
             httpGet:
-              path: /api/health
+              path: /api/live
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20

@@ -14,7 +14,6 @@ Ecommerce sencillo de venta de ropa desplegado sobre Kubernetes:
 |   |-- backend.yaml
 |   |-- frontend.yaml
 |   |-- mongo.yaml
-|   |-- config.yaml
 |   `-- namespace.yaml
 |-- scripts/
 |   |-- k8s-start.cjs
@@ -55,11 +54,13 @@ Para elegir explicitamente un contexto local disponible:
 K8S_LOCAL_CONTEXT="docker-desktop" npm start
 ```
 
-`npm start` construye imagenes locales, aplica los manifiestos de `k8s/`, crea el `Secret` TLS del frontend desde `frontend/certs/` y espera los rollouts. El flujo funciona directo con Kubernetes de Docker Desktop porque usa las imagenes construidas por el Docker local.
+`npm start` construye imagenes locales, crea la configuracion y el `Secret` de MongoDB desde `.env`, aplica los manifiestos de `k8s/`, crea el `Secret` TLS del frontend desde `frontend/certs/` y espera los rollouts. El flujo funciona directo con Kubernetes de Docker Desktop porque usa las imagenes construidas por el Docker local.
 
 ```bash
 npm start
 ```
+
+Las variables `MONGO_DB`, `MONGO_USER` y `MONGO_PASSWORD` deben existir en `.env`. MongoDB usa esas credenciales al inicializar su volumen por primera vez; si cambian despues de crear el PVC local, se debe actualizar el usuario dentro de MongoDB o reinicializar ese volumen de forma controlada.
 
 `npm start` siempre aplica recursos al cluster local seleccionado. Si tambien necesitas publicar las imagenes en un registry, el script puede hacerlo cuando Docker ya tiene sesion iniciada en ese registry:
 
@@ -98,7 +99,7 @@ npm run status
 npm run logs
 ```
 
-- `start` construye las imagenes y aplica Kubernetes.
+- `start` construye las imagenes, aplica Kubernetes y reinicia backend/frontend para tomar la configuracion e imagenes locales nuevas.
 - `stop` escala frontend, backend y MongoDB a cero sin borrar el PVC de MongoDB.
 - `status` muestra Pods, Services y PVC del namespace `proyecto-1036622`.
 - `logs` sigue los logs del backend.
@@ -106,11 +107,11 @@ npm run logs
 ## Kubernetes
 
 - `namespace.yaml` aisla los recursos en `proyecto-1036622`.
-- `config.yaml` define el nombre de base de datos y el `Secret` de MongoDB.
 - `mongo.yaml` crea un `StatefulSet`, un Service interno y un PVC de `1Gi`.
 - `backend.yaml` crea el Deployment Flask y un Service interno llamado `backend`.
 - `frontend.yaml` crea el Deployment Nginx y un Service `LoadBalancer` para HTTP y HTTPS.
-- `k8s-start.cjs` crea el `Secret` `frontend-tls` desde los certificados locales antes de aplicar el frontend.
+- `k8s-start.cjs` crea el `ConfigMap` `proyecto-config` y el `Secret` `mongo-auth` desde `.env`, y el `Secret` `frontend-tls` desde los certificados locales antes de aplicar los recursos.
+- `k8s-start.cjs` reinicia los Deployments `backend` y `frontend` en cada arranque para que lean los `Secrets`, `ConfigMaps` e imagenes locales actuales. No borra ni reinicializa el PVC de MongoDB.
 
 Las imagenes locales del backend y frontend usan `imagePullPolicy: IfNotPresent`. Para Kubernetes de Docker Desktop se reutilizan las imagenes que construye `npm start`; en otro cluster los nodos deben poder obtenerlas desde el registry configurado.
 
@@ -133,7 +134,7 @@ Desde el navegador se puede agregar ropa al carrito y registrar un pedido. Ese f
 
 ## Seguridad basica aplicada
 
-- Las credenciales de MongoDB estan en un `Secret` de Kubernetes, no dentro del codigo Flask.
+- Las credenciales de MongoDB se leen desde `.env` y se cargan en un `Secret` de Kubernetes durante `npm start`, no quedan escritas en los manifiestos.
 - MongoDB no usa NodePort ni LoadBalancer, por lo tanto queda interno al cluster.
 - El frontend usa proxy Nginx para llamar al backend por nombre de Service.
 - El certificado local se monta como `Secret` TLS en el Pod del frontend.
@@ -142,7 +143,7 @@ Desde el navegador se puede agregar ropa al carrito y registrar un pedido. Ese f
 
 ## Riesgos identificados
 
-- `k8s/config.yaml` contiene credenciales de ejemplo y deben cambiarse o administrarse fuera del repositorio para un despliegue real.
+- `.env` contiene credenciales locales y esta excluido de Git; en un despliegue real se deben administrar con un gestor de secretos.
 - El certificado HTTPS incluido es local/autofirmado, por lo que el navegador puede mostrar advertencia.
 - Para produccion se deberian usar secretos administrados, certificados validos y reglas de firewall.
 - Un cluster remoto requiere imagenes publicadas en un registry accesible para sus nodos.
@@ -150,6 +151,7 @@ Desde el navegador se puede agregar ropa al carrito y registrar un pedido. Ese f
 ## Endpoints principales
 
 - `GET /api/health`: valida conexion con MongoDB.
+- `GET /api/live`: responde sin consultar MongoDB para la sonda de vida del backend.
 - `GET /api/products`: lista prendas disponibles.
 - `GET /api/orders`: lista pedidos recientes.
 - `POST /api/orders`: registra un pedido con `customerName` e `items`.

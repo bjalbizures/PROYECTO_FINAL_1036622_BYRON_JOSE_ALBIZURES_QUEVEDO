@@ -1,4 +1,5 @@
 const { spawnSync } = require("node:child_process");
+const { readFileSync } = require("node:fs");
 
 const namespace = "proyecto-1036622";
 const preferredLocalContexts = ["docker-desktop", "minikube"];
@@ -69,6 +70,49 @@ function pickLocalContext(contexts) {
     ?? contexts.find((context) => context.startsWith("kind-"));
 }
 
+function readEnvFile(path) {
+  const values = {};
+  const lines = readFileSync(path, "utf8").split(/\r?\n/);
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    if (!trimmedLine || trimmedLine.startsWith("#")) {
+      continue;
+    }
+
+    const separator = trimmedLine.indexOf("=");
+
+    if (separator === -1) {
+      continue;
+    }
+
+    const key = trimmedLine.slice(0, separator).trim();
+    let value = trimmedLine.slice(separator + 1).trim();
+
+    if (
+      (value.startsWith('"') && value.endsWith('"'))
+      || (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    values[key] = value;
+  }
+
+  return values;
+}
+
+function requireEnvValue(values, name) {
+  const value = process.env[name] || values[name];
+
+  if (!value) {
+    throw new Error(`Falta ${name} en .env.`);
+  }
+
+  return value;
+}
+
 try {
   const currentContext = read("kubectl", ["config", "current-context"]);
   const contexts = read("kubectl", ["config", "get-contexts", "-o", "name"]).split(/\r?\n/).filter(Boolean);
@@ -87,6 +131,11 @@ try {
     console.log(`Usando contexto Kubernetes local '${localContext}'.`);
   }
 
+  const env = readEnvFile(".env");
+  const mongoUser = requireEnvValue(env, "MONGO_USER");
+  const mongoPassword = requireEnvValue(env, "MONGO_PASSWORD");
+  const mongoDb = requireEnvValue(env, "MONGO_DB");
+  const mongoUri = `mongodb://${encodeURIComponent(mongoUser)}:${encodeURIComponent(mongoPassword)}@mongo:27017/${encodeURIComponent(mongoDb)}?authSource=admin`;
   const registry = process.env.K8S_IMAGE_REGISTRY?.replace(/\/+$/, "");
   const imagePrefix = registry ? `${registry}/` : "";
   const frontendImage = `${imagePrefix}proyecto-1036622-frontend:local`;
@@ -107,6 +156,43 @@ try {
   }
 
   run("kubectl", ["apply", "-f", "k8s/namespace.yaml"]);
+
+  const mongoConfig = run(
+    "kubectl",
+    [
+      "create",
+      "configmap",
+      "proyecto-config",
+      "--namespace",
+      namespace,
+      `--from-literal=mongo-db=${mongoDb}`,
+      "--dry-run=client",
+      "-o",
+      "yaml",
+    ],
+    { captureStdout: true },
+  );
+  run("kubectl", ["apply", "-f", "-"], { input: mongoConfig });
+
+  const mongoSecret = run(
+    "kubectl",
+    [
+      "create",
+      "secret",
+      "generic",
+      "mongo-auth",
+      "--namespace",
+      namespace,
+      `--from-literal=username=${mongoUser}`,
+      `--from-literal=password=${mongoPassword}`,
+      `--from-literal=uri=${mongoUri}`,
+      "--dry-run=client",
+      "-o",
+      "yaml",
+    ],
+    { captureStdout: true },
+  );
+  run("kubectl", ["apply", "-f", "-"], { input: mongoSecret });
 
   const tlsSecret = run(
     "kubectl",
@@ -132,6 +218,8 @@ try {
   run("kubectl", ["apply", "-f", "k8s"]);
   run("kubectl", ["set", "image", "deployment/backend", `backend=${backendImage}`, "--namespace", namespace]);
   run("kubectl", ["set", "image", "deployment/frontend", `frontend=${frontendImage}`, "--namespace", namespace]);
+  run("kubectl", ["rollout", "restart", "deployment/backend", "--namespace", namespace]);
+  run("kubectl", ["rollout", "restart", "deployment/frontend", "--namespace", namespace]);
   run("kubectl", ["rollout", "status", "statefulset/mongo", "--namespace", namespace, "--timeout=120s"]);
   run("kubectl", ["rollout", "status", "deployment/backend", "--namespace", namespace, "--timeout=120s"]);
   run("kubectl", ["rollout", "status", "deployment/frontend", "--namespace", namespace, "--timeout=120s"]);
